@@ -5,72 +5,45 @@
 <title>Voyage Planner</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link rel="stylesheet"
- href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<!-- ✅ Leaflet CSS -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
 
 <style>
-body{
-  margin:0;
-  font-family:Segoe UI, Arial, sans-serif;
-  background:#ffffff;
-}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#fff}
 #map{height:420px}
-
 .container{padding:24px}
-
-.header{
-  display:grid;
-  grid-template-columns:2fr 2fr 1fr;
-  gap:20px;
-  margin-bottom:25px;
-}
-
+.header{display:grid;grid-template-columns:2fr 2fr 1fr;gap:20px}
 .logo-box{
-  border:1px dashed #9ca3af;
-  height:60px;
-  border-radius:6px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:#f9fafb;
+  border:1px solid #d1d5db;height:60px;
+  display:flex;align-items:center;justify-content:center;
+  background:#f9fafb
 }
 .logo-box img{max-height:100%}
-
 .grid{
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:30px;
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:30px;margin-top:25px
 }
-
 label{font-weight:600;font-size:13px}
 input,select{
-  width:100%;
-  padding:8px;
-  margin-top:6px;
-  margin-bottom:12px;
-  border:1px solid #d1d5db;
-  border-radius:4px;
+  width:100%;padding:8px;margin:6px 0 12px;
+  border:1px solid #d1d5db;border-radius:4px
 }
-
 button{
-  background:#1d4ed8;
-  color:#fff;
-  border:none;
-  padding:10px 28px;
-  cursor:pointer;
-  border-radius:4px;
+  background:#1d4ed8;color:#fff;border:none;
+  padding:10px 24px;border-radius:4px;cursor:pointer
 }
 button:hover{background:#1e40af}
+.print{background:#059669;margin-top:10px}
+.result{border-left:2px solid #e5e7eb;padding-left:20px}
+footer{margin-top:30px;font-size:12px;color:#6b7280}
 
-.result{
-  border-left:2px solid #e5e7eb;
-  padding-left:20px;
-}
-
-.footer{
-  margin-top:30px;
-  font-size:12px;
-  color:#6b7280;
+@media print{
+  body *{visibility:hidden}
+  .result,.result *{visibility:visible}
+  .result{position:absolute;left:0;top:0;width:100%}
 }
 </style>
 </head>
@@ -81,183 +54,299 @@ button:hover{background:#1e40af}
 
 <div class="container">
 
-<!-- HEADER -->
+<!-- ================= HEADER ================= -->
 <div class="header">
+
   <div>
-    <label>Shipping Line Name</label>
-    <input id="lineName" value="Maersk Line">
+    <label>Shipping Line</label>
+    <select id="lineSelect" onchange="updateLine()">
+      <option value="MAERSK">Maersk Line</option>
+      <option value="CMA">CMA CGM</option>
+      <option value="OTHER">Other Line</option>
+    </select>
+    <input
+      id="otherLineName"
+      placeholder="Enter Other Line Name"
+      style="display:none"
+    >
   </div>
 
   <div>
     <label>Vessel Name</label>
-    <input id="vesselName" value="MCC DANANG">
+    <select id="vesselName" onchange="updateVessel()"></select>
+    <input
+      id="manualVessel"
+      placeholder="Enter Vessel Name"
+      style="display:none"
+    >
   </div>
 
   <div>
-    <label>Shipping Line Logo</label>
+    <label>Line Logo</label>
     <div class="logo-box">
       <img id="logoPreview">
     </div>
-    <input type="file" onchange="uploadLogo(event)">
   </div>
+
 </div>
 
+<!-- ================= CONTENT GRID ================= -->
 <div class="grid">
 
-<!-- DEPARTURE -->
-<div>
-  <h3>Port of Departure</h3>
+  <!-- Departure -->
+  <div>
+    <h3>Departure</h3>
 
-  <label>Country</label>
-  <select id="depCountry" onchange="loadPorts('dep')"></select>
+    <label>Country</label>
+    <select id="depCountry" onchange="loadPorts('dep')"></select>
 
-  <label>Port</label>
-  <select id="depPort"></select>
+    <label>Port</label>
+    <select id="depPort"></select>
 
-  <label>Vessel Speed (knots)</label>
-  <input id="speed" value="10">
+    <label>Departure Date & Time</label>
+    <input type="datetime-local" id="departureTime">
+
+    <label>Time Mode</label>
+    <select id="timeMode">
+      <option value="LOCAL">Local</option>
+      <option value="UTC">UTC</option>
+    </select>
+  </div>
+
+  <!-- Arrival / Planning -->
+  <div>
+    <h3>Arrival / Planning</h3>
+
+    <label>Country</label>
+    <select id="arrCountry" onchange="loadPorts('arr')"></select>
+
+    <label>Port</label>
+    <select id="arrPort"></select>
+
+    <label>Service Name</label>
+    <input id="serviceName" readonly>
+
+    <label>Speed (knots)</label>
+    <input id="speed">
+
+    <label>Buffer (hours)</label>
+    <input id="buffer">
+
+    <button onclick="calculate()">Calculate</button>
+  </div>
+
+  <!-- Result -->
+  <div class="result">
+    <h3>Voyage Result</h3>
+    <p><b>Distance:</b> <span id="dist">—</span> NM</p>
+    <p><b>Service:</b> <span id="svc">—</span></p>
+    <p><b>Sailing Time:</b> <span id="time">—</span></p>
+    <p><b>ETA:</b><br><b><span id="eta">—</span></b></p>
+    <button class="print" onclick="window.print()">
+      Print / Save PDF
+    </button>
+  </div>
+
 </div>
 
-<!-- ARRIVAL -->
-<div>
-  <h3>Port of Arrival</h3>
-
-  <label>Country</label>
-  <select id="arrCountry" onchange="loadPorts('arr')"></select>
-
-  <label>Port</label>
-  <select id="arrPort"></select>
-
-  <button onclick="calculate()">Calculate</button>
-</div>
-
-<!-- RESULT -->
-<div class="result">
-  <h3>Result</h3>
-  <p><strong>Distance:</strong> <span id="dist">—</span> NM</p>
-  <p><strong>Vessel speed:</strong> <span id="spd">—</span> knots</p>
-  <p><strong>ETA:</strong> <span id="time">—</span></p>
-</div>
+<footer>
+Developed by <b>Sazzad Zaman Anik</b> — Vessel Planning Tool
+</footer>
 
 </div>
 
-<div class="footer">
-  Developed by <strong>Sazzad Zaman Anik</strong> — Vessel Planner
-</div>
-
-</div>
-
+<!-- ✅ Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-/* PORT DATABASE */
-const ports={
-  Bangladesh:{
-    "Chittagong":[22.3,91.8],
-    "RSGT, Patenga Container Terminal":[22.2,91.77]
+/* ================= CONFIG ================= */
+
+const lineLogos = {
+  MAERSK: "https://upload.wikimedia.org/wikipedia/commons/5/5e/Maersk_Line_logo.svg",
+  CMA: "https://upload.wikimedia.org/wikipedia/commons/2/23/CMA_CGM_logo.svg"
+};
+
+const vessels = {
+  MAERSK: {
+    speed: 12, buffer: 12,
+    list: {
+      "MAERSK CHATTOGRAM": "IA7",
+      "MAERSK DHAKA": "IA7",
+      "MAERSK SIHANOUKVILLE": "IA7",
+      "MAERSK YOKOHAMA": "IA7",
+      "MAERSK VLADIVOSTOK": "IA7",
+      "MCC DANANG": "Feeder",
+      "MCC TAIPEI": "Feeder",
+      "MCC TOKYO": "Feeder",
+      "OTHER-VESSEL": "Feeder"
+    }
   },
-  Malaysia:{
-    "Port Klang":[3.0,101.4],
-    "Tanjung Pelepas":[1.36,103.55]
+  CMA: {
+    speed: 11, buffer: 18,
+    list: {
+      "CMA CGM KINABALU": "BBX",
+      "CMA CGM FUJI": "BBX",
+      "SMOOTH VENTURE": "Feeder",
+      "CALA PAGURO": "Feeder",
+      "CNC PADMA": "Feeder",
+      "CNC TIGER": "Feeder",
+      "OTHER-VESSEL": "Feeder"
+    }
   },
-  Singapore:{
-    "SGSIN":[1.29,103.85]
-  },
-  China:{
-    "Shanghai":[31.23,121.47],
-    "Ningbo":[29.95,121.7]
-  },
-  Vietnam:{
-    "Ho Chi Minh (VNSGN)":[10.76,106.7],
-    "Hai Phong":[20.85,106.68]
+  OTHER: {
+    speed: "", buffer: "",
+    list: {
+      "OTHER-VESSEL": "Custom Service"
+    }
   }
 };
 
-/* INIT DROPDOWNS */
-const depCountry=document.getElementById("depCountry");
-const arrCountry=document.getElementById("arrCountry");
+/* ✅ FULL PORT DATABASE */
+const ports = {
+  Bangladesh: {
+    "Chittagong": [22.3, 91.8],
+    "RSGT, Patenga Container Terminal": [22.2, 91.77]
+  },
+  Malaysia: {
+    "Port Klang": [3.0, 101.4],
+    "Tanjung Pelepas": [1.36, 103.55],
+    "Penang": [5.41, 100.34]
+  },
+  Singapore: {
+    "SGSIN": [1.29, 103.85]
+  },
+  China: {
+    "Shanghai": [31.23, 121.47],
+    "Ningbo": [29.95, 121.7],
+    "Shenzhen (Yantian)": [22.54, 114.23]
+  },
+  Vietnam: {
+    "Ho Chi Minh (VNSGN)": [10.76, 106.7],
+    "Hai Phong": [20.85, 106.68],
+    "Cai Mep": [10.6, 107.0]
+  }
+};
 
-Object.keys(ports).forEach(c=>{
-  depCountry.add(new Option(c,c));
-  arrCountry.add(new Option(c,c));
+/* ================= INIT ================= */
+
+Object.keys(ports).forEach(c => {
+  depCountry.add(new Option(c, c));
+  arrCountry.add(new Option(c, c));
 });
 
-function loadPorts(type){
-  const country=document.getElementById(type+"Country").value;
-  const portSel=document.getElementById(type+"Port");
-  portSel.innerHTML="";
-  Object.keys(ports[country]).forEach(p=>{
-    portSel.add(new Option(p,p));
-  });
+function loadPorts(type) {
+  const sel = document.getElementById(type + "Port");
+  sel.innerHTML = "";
+  Object.keys(ports[document.getElementById(type + "Country").value])
+    .forEach(p => sel.add(new Option(p, p)));
 }
-loadPorts("dep");
-loadPorts("arr");
+loadPorts("dep"); loadPorts("arr");
 
-/* MAP */
-const map=L.map('map').setView([10,95],3);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+/* ================= MAP ================= */
+
+const map = L.map("map").setView([10, 95], 3);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png")
   .addTo(map);
-
 let route;
 
-/* HAVERSINE (NM) */
-function haversine(a,b){
-  const R=3440.065;
-  const dLat=(b[0]-a[0])*Math.PI/180;
-  const dLon=(b[1]-a[1])*Math.PI/180;
-  const lat1=a[0]*Math.PI/180;
-  const lat2=b[0]*Math.PI/180;
-  const h=Math.sin(dLat/2)**2+
-          Math.cos(lat1)*Math.cos(lat2)*
-          Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+/* ================= LINE / VESSEL ================= */
+
+function updateLine() {
+  const line = lineSelect.value;
+  vesselName.innerHTML = "";
+  manualVessel.style.display = "none";
+
+  if (line === "OTHER") {
+    otherLineName.style.display = "block";
+    logoPreview.src = "";
+    vesselName.add(new Option("Other Vessel", "OTHER-VESSEL"));
+    serviceName.value = "Custom Service";
+    speed.value = "";
+    buffer.value = "";
+    updateVessel();
+    return;
+  }
+
+  otherLineName.style.display = "none";
+  logoPreview.src = lineLogos[line];
+
+  Object.keys(vessels[line].list).forEach(v =>
+    vesselName.add(
+      new Option(v === "OTHER-VESSEL" ? "Other Vessel" : v, v)
+    )
+  );
+
+  speed.value = vessels[line].speed;
+  buffer.value = vessels[line].buffer;
+  updateVessel();
 }
 
-/* MARITIME ROUTE (SEA ONLY) */
-function getSeaRoute(dep,arr){
-  return [
-    dep,
-    [18,90],   // Bay of Bengal
-    [12,88],
-    [6,92],    // Indian Ocean
-    [2,97],    // Malacca Strait
-    [1.5,101],
-    [2,104],   // Singapore Strait
-    arr
-  ];
+function updateVessel() {
+  const line = lineSelect.value;
+  const vessel = vesselName.value;
+  manualVessel.style.display =
+    vessel === "OTHER-VESSEL" ? "block" : "none";
+
+  const svc =
+    line === "OTHER"
+      ? "Custom Service"
+      : vessels[line].list[vessel];
+
+  serviceName.value = svc;
+  document.getElementById("svc").textContent = svc;
+}
+updateLine();
+
+/* ================= CALCULATION ================= */
+
+function hav(a, b) {
+  const R = 3440.065;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  return R * 2 * Math.asin(Math.sqrt(
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * Math.PI / 180) *
+    Math.cos(b[0] * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2
+  ));
 }
 
-/* CALCULATE */
-function calculate(){
-  const spd=parseFloat(speed.value);
-  if(spd<=0){alert("Speed must be greater than 0");return;}
+function calculate() {
+  if (!departureTime.value) {
+    alert("Please select departure date & time");
+    return;
+  }
 
-  const dep=ports[depCountry.value][depPort.value];
-  const arr=ports[arrCountry.value][arrPort.value];
+  const spd = Number(speed.value);
+  if (!spd || spd <= 0) {
+    alert("Please enter a valid speed");
+    return;
+  }
 
-  const dist=haversine(dep,arr);
-  const hrs=dist/spd;
-  const days=Math.floor(hrs/24);
-  const remH=Math.round(hrs%24);
+  const buf = Number(buffer.value) || 0;
 
-  document.getElementById("dist").textContent=dist.toFixed(0);
-  document.getElementById("spd").textContent=spd;
-  document.getElementById("time").textContent=
-    `${days} days ${remH} hours`;
+  const dep = ports[depCountry.value][depPort.value];
+  const arr = ports[arrCountry.value][arrPort.value];
 
-  if(route)map.removeLayer(route);
-  route=L.polyline(getSeaRoute(dep,arr),{
-    color:"#2563eb",
-    weight:3,
-    dashArray:"6 10"
-  }).addTo(map);
-  map.fitBounds(route.getBounds(),{padding:[50,50]});
-}
+  const dist = hav(dep, arr);
+  const hrs = (dist / spd) + buf;
 
-/* LOGO UPLOAD */
-function uploadLogo(e){
-  const r=new FileReader();
-  r.onload=()=>logoPreview.src=r.result;
-  r.readAsDataURL(e.target.files[0]);
+  document.getElementById("dist").textContent = dist.toFixed(0);
+  document.getElementById("time").textContent =
+    `${Math.floor(hrs / 24)} days ${Math.round(hrs % 24)} hours`;
+
+  let d = new Date(departureTime.value);
+  if (timeMode.value === "UTC") d = new Date(d.toISOString());
+
+  document.getElementById("eta").textContent =
+    new Date(d.getTime() + hrs * 3600000).toLocaleString();
+
+  if (route) map.removeLayer(route);
+  route = L.polyline([dep, [5, 95], arr],
+    { color: "#2563eb", dashArray: "6 10" }
+  ).addTo(map);
+
+  map.fitBounds(route.getBounds(), { padding: [40, 40] });
 }
 </script>
 
