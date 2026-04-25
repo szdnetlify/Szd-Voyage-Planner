@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voyage Planner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+body{
+  margin:0;
+  font-family:Segoe UI, Arial, sans-serif;
+  background:#ffffff;
+}
+#map{height:420px}
+
+.container{padding:24px}
+
+.header{
+  display:grid;
+  grid-template-columns:2fr 2fr 1fr;
+  gap:20px;
+  margin-bottom:25px;
+}
+
+.logo-box{
+  border:1px dashed #9ca3af;
+  height:60px;
+  border-radius:6px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#f9fafb;
+}
+.logo-box img{max-height:100%}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:30px;
+}
+
+label{font-weight:600;font-size:13px}
+input,select{
+  width:100%;
+  padding:8px;
+  margin-top:6px;
+  margin-bottom:12px;
+  border:1px solid #d1d5db;
+  border-radius:4px;
+}
+
+button{
+  background:#1d4ed8;
+  color:#fff;
+  border:none;
+  padding:10px 28px;
+  cursor:pointer;
+  border-radius:4px;
+}
+button:hover{background:#1e40af}
+
+.result{
+  border-left:2px solid #e5e7eb;
+  padding-left:20px;
+}
+
+.footer{
+  margin-top:30px;
+  font-size:12px;
+  color:#6b7280;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="container">
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <label>Shipping Line Name</label>
+    <input id="lineName" value="Maersk Line">
+  </div>
+
+  <div>
+    <label>Vessel Name</label>
+    <input id="vesselName" value="MCC DANANG">
+  </div>
+
+  <div>
+    <label>Shipping Line Logo</label>
+    <div class="logo-box">
+      <img id="logoPreview">
+    </div>
+    <input type="file" onchange="uploadLogo(event)">
+  </div>
+</div>
+
+<div class="grid">
+
+<!-- DEPARTURE -->
+<div>
+  <h3>Port of Departure</h3>
+
+  <label>Country</label>
+  <select id="depCountry" onchange="loadPorts('dep')"></select>
+
+  <label>Port</label>
+  <select id="depPort"></select>
+
+  <label>Vessel Speed (knots)</label>
+  <input id="speed" value="10">
+</div>
+
+<!-- ARRIVAL -->
+<div>
+  <h3>Port of Arrival</h3>
+
+  <label>Country</label>
+  <select id="arrCountry" onchange="loadPorts('arr')"></select>
+
+  <label>Port</label>
+  <select id="arrPort"></select>
+
+  <button onclick="calculate()">Calculate</button>
+</div>
+
+<!-- RESULT -->
+<div class="result">
+  <h3>Result</h3>
+  <p><strong>Distance:</strong> <span id="dist">—</span> NM</p>
+  <p><strong>Vessel speed:</strong> <span id="spd">—</span> knots</p>
+  <p><strong>ETA:</strong> <span id="time">—</span></p>
+</div>
+
+</div>
+
+<div class="footer">
+  Developed by <strong>Sazzad Zaman Anik</strong> — Vessel Planner
+</div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* PORT DATABASE */
+const ports={
+  Bangladesh:{
+    "Chittagong":[22.3,91.8],
+    "RSGT, Patenga Container Terminal":[22.2,91.77]
+  },
+  Malaysia:{
+    "Port Klang":[3.0,101.4],
+    "Tanjung Pelepas":[1.36,103.55]
+  },
+  Singapore:{
+    "SGSIN":[1.29,103.85]
+  },
+  China:{
+    "Shanghai":[31.23,121.47],
+    "Ningbo":[29.95,121.7]
+  },
+  Vietnam:{
+    "Ho Chi Minh (VNSGN)":[10.76,106.7],
+    "Hai Phong":[20.85,106.68]
+  }
+};
+
+/* INIT DROPDOWNS */
+const depCountry=document.getElementById("depCountry");
+const arrCountry=document.getElementById("arrCountry");
+
+Object.keys(ports).forEach(c=>{
+  depCountry.add(new Option(c,c));
+  arrCountry.add(new Option(c,c));
+});
+
+function loadPorts(type){
+  const country=document.getElementById(type+"Country").value;
+  const portSel=document.getElementById(type+"Port");
+  portSel.innerHTML="";
+  Object.keys(ports[country]).forEach(p=>{
+    portSel.add(new Option(p,p));
+  });
+}
+loadPorts("dep");
+loadPorts("arr");
+
+/* MAP */
+const map=L.map('map').setView([10,95],3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+  .addTo(map);
+
+let route;
+
+/* HAVERSINE (NM) */
+function haversine(a,b){
+  const R=3440.065;
+  const dLat=(b[0]-a[0])*Math.PI/180;
+  const dLon=(b[1]-a[1])*Math.PI/180;
+  const lat1=a[0]*Math.PI/180;
+  const lat2=b[0]*Math.PI/180;
+  const h=Math.sin(dLat/2)**2+
+          Math.cos(lat1)*Math.cos(lat2)*
+          Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+}
+
+/* MARITIME ROUTE (SEA ONLY) */
+function getSeaRoute(dep,arr){
+  return [
+    dep,
+    [18,90],   // Bay of Bengal
+    [12,88],
+    [6,92],    // Indian Ocean
+    [2,97],    // Malacca Strait
+    [1.5,101],
+    [2,104],   // Singapore Strait
+    arr
+  ];
+}
+
+/* CALCULATE */
+function calculate(){
+  const spd=parseFloat(speed.value);
+  if(spd<=0){alert("Speed must be greater than 0");return;}
+
+  const dep=ports[depCountry.value][depPort.value];
+  const arr=ports[arrCountry.value][arrPort.value];
+
+  const dist=haversine(dep,arr);
+  const hrs=dist/spd;
+  const days=Math.floor(hrs/24);
+  const remH=Math.round(hrs%24);
+
+  document.getElementById("dist").textContent=dist.toFixed(0);
+  document.getElementById("spd").textContent=spd;
+  document.getElementById("time").textContent=
+    `${days} days ${remH} hours`;
+
+  if(route)map.removeLayer(route);
+  route=L.polyline(getSeaRoute(dep,arr),{
+    color:"#2563eb",
+    weight:3,
+    dashArray:"6 10"
+  }).addTo(map);
+  map.fitBounds(route.getBounds(),{padding:[50,50]});
+}
+
+/* LOGO UPLOAD */
+function uploadLogo(e){
+  const r=new FileReader();
+  r.onload=()=>logoPreview.src=r.result;
+  r.readAsDataURL(e.target.files[0]);
+}
+</script>
+
+</body>
+</html>
