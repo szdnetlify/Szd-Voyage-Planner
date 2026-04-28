@@ -1,0 +1,7 @@
+theme: jekyll-theme-minimal
+title: Voyage Planner
+description: Voyage Planner for ETA
+url: https://szdnetlify.github.io/voyage-planner/
+github:
+  is_project_page: true
+  repository_url: https://github.com/szdnetlify/voyage-planner
